@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Quarto</title>
+    <meta
+      name="description"
+      content="Quarto — the four-attribute strategy game. Play against a friend or a minimax computer opponent."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230d0e11'/%3E%3Ccircle cx='50' cy='50' r='28' fill='none' stroke='%23f3ede1' stroke-width='9'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="mark" aria-hidden="true"></span>
+          <h1>Quarto</h1>
+        </div>
+        <div class="toolbar">
+          <span class="mode-badge" id="mode-badge"></span>
+          <button class="btn ghost icon" id="theme" type="button" aria-label="Toggle theme">
+            <span class="theme-dot" aria-hidden="true"></span>
+          </button>
+          <button class="btn ghost" id="rules-btn" type="button">Rules</button>
+          <button class="btn" id="newgame-btn" type="button">New game</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="stage">
+          <div class="turnbar" id="turnbar">
+            <div class="player" data-player="0"><span class="pip"></span><span class="pname">Player 1</span></div>
+            <div class="player" data-player="1"><span class="pip"></span><span class="pname">Player 2</span></div>
+          </div>
+          <div class="status" id="status" role="status" aria-live="polite"></div>
+          <div class="board-frame">
+            <div class="board" id="board"></div>
+          </div>
+        </section>
+
+        <aside class="side">
+          <section class="card hand-card">
+            <h2 class="label">In play</h2>
+            <div class="hand-slot" id="hand"></div>
+            <p class="hint" id="hint"></p>
+          </section>
+
+          <section class="card tray-card">
+            <h2 class="label">Pieces <span class="count" id="tray-count"></span></h2>
+            <div class="tray" id="tray"></div>
+          </section>
+
+          <div class="side-actions">
+            <button class="btn ghost block" id="undo-btn" type="button">Undo</button>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <div class="overlay" id="setup" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+        <h2 id="setup-title">New game</h2>
+
+        <fieldset class="field">
+          <legend>Opponent</legend>
+          <div class="segmented" data-group="mode">
+            <button type="button" data-value="cpu">Computer</button>
+            <button type="button" data-value="human">Two players</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="field" id="field-level">
+          <legend>Difficulty</legend>
+          <div class="segmented" data-group="level">
+            <button type="button" data-value="easy">Easy</button>
+            <button type="button" data-value="medium">Medium</button>
+            <button type="button" data-value="hard">Hard</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="field" id="field-first">
+          <legend>First move</legend>
+          <div class="segmented" data-group="first">
+            <button type="button" data-value="0">You</button>
+            <button type="button" data-value="1">Computer</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend>Variant</legend>
+          <label class="switch">
+            <input type="checkbox" id="squares-toggle" />
+            <span class="track"><span class="knob"></span></span>
+            <span class="switch-text">
+              <strong>2×2 squares count</strong>
+              <small>Advanced rule: any 2×2 block also wins</small>
+            </span>
+          </label>
+        </fieldset>
+
+        <div class="sheet-actions">
+          <button class="btn ghost" id="setup-cancel" type="button">Cancel</button>
+          <button class="btn" id="setup-start" type="button">Start game</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="rules" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+        <h2 id="rules-title">How to play</h2>
+        <div class="prose">
+          <p>
+            Sixteen pieces, each one <strong>tall or short</strong>, <strong>light or dark</strong>,
+            <strong>round or square</strong>, <strong>solid or hollow</strong>. No two are alike.
+          </p>
+          <p>
+            The twist: <strong>you never choose your own piece.</strong> You pick a piece and hand it to your
+            opponent, they place it anywhere on the board, and then they pick the piece for you.
+          </p>
+          <p>
+            You win by placing the fourth piece of a line — row, column or diagonal — in which all four pieces
+            share <strong>at least one</strong> attribute. Turn on the 2×2 variant and any square block counts
+            too. Sixteen pieces down with no line is a draw.
+          </p>
+          <p class="muted">
+            The board calls “Quarto!” for you: a completed line is detected and highlighted automatically.
+          </p>
+        </div>
+        <div class="sheet-actions">
+          <button class="btn" id="rules-close" type="button">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
