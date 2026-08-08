@@ -592,6 +592,13 @@ h2 {
   color: var(--bg);
 }
 
+.field-note {
+  margin: 9px 2px 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 .switch {
   display: flex;
   align-items: center;

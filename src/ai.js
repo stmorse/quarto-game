@@ -22,10 +22,22 @@ const TIMEOUT = Symbol('timeout');
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
+/**
+ * `minDepth` is a floor that ignores the clock — it is what makes a level's
+ * promise true rather than merely likely. Depth 3 is the interesting one: it
+ * is the depth at which the search sees the standard trap (hand over a piece,
+ * opponent places it and hands back something safe, and now every piece you
+ * could return wins for them). Depth 3 costs under 60ms even on an empty
+ * board, so guaranteeing it is free; depth 4 can cost seconds in the opening,
+ * which is what the time budget is for.
+ *
+ * `blunder` is the chance of ignoring the search entirely and playing at
+ * random — including handing over a winning piece. Only easy does this.
+ */
 export const LEVELS = {
-  easy: { maxDepth: 1, timeMs: 120, margin: 900, blunder: 0.55 },
-  medium: { maxDepth: 4, timeMs: 700, margin: 120, blunder: 0.1 },
-  hard: { maxDepth: 14, timeMs: 2600, margin: 0, blunder: 0 },
+  easy: { maxDepth: 1, minDepth: 1, timeMs: 150, margin: 900, blunder: 0.55 },
+  medium: { maxDepth: 4, minDepth: 3, timeMs: 900, margin: 40, blunder: 0 },
+  hard: { maxDepth: 16, minDepth: 3, timeMs: 2600, margin: 0, blunder: 0 },
 };
 
 export class Searcher {
@@ -35,7 +47,8 @@ export class Searcher {
     this.rng = rng;
     this.tt = new Map();
     this.nodes = 0;
-    this.deadline = Infinity;
+    this.limit = Infinity; // hard stop for this move
+    this.deadline = Infinity; // current iteration's stop; Infinity below minDepth
   }
 
   key(board, piece) {
@@ -172,7 +185,8 @@ export class Searcher {
     const cfg = timeMs ? { ...base, timeMs } : base;
     this.tt.clear();
     this.nodes = 0;
-    this.deadline = now() + cfg.timeMs;
+    this.limit = now() + cfg.timeMs;
+    this.deadline = this.limit;
     const work = Int8Array.from(board);
 
     if (piece < 0) return { cell: -1, give: this.chooseGift(work, avail, cfg) };
@@ -197,6 +211,7 @@ export class Searcher {
 
     let best = moves;
     for (let depth = 1; depth <= cfg.maxDepth; depth++) {
+      this.deadline = depth <= cfg.minDepth ? Infinity : this.limit;
       try {
         const scored = this.scoreRoot(work, piece, avail, moves, depth, cfg.margin);
         scored.sort((a, b) => b.score - a.score);
@@ -208,7 +223,7 @@ export class Searcher {
         if (e !== TIMEOUT) throw e;
         break;
       }
-      if (now() > this.deadline) break;
+      if (now() > this.limit) break;
     }
 
     const chosen = this.pickAmong(best, cfg);
@@ -263,33 +278,39 @@ export class Searcher {
       return all[Math.floor(this.rng() * all.length)];
     }
 
-    let best = pool[0];
-    let bestScore = -Infinity;
-    const results = [];
-    for (const q of pool) {
-      let score;
+    if (pool.length === 1) return pool[0];
+
+    let best = pool.map((give) => ({ give, score: 0 }));
+    for (let depth = 1; depth <= cfg.maxDepth; depth++) {
+      this.deadline = depth <= cfg.minDepth ? Infinity : this.limit;
       try {
-        score = -this.negamax(board, q, avail & ~bit(q), Math.max(1, cfg.maxDepth - 1), -Infinity, Infinity, 1);
+        const scored = pool.map((give) => ({
+          give,
+          score: -this.negamax(board, give, avail & ~bit(give), depth - 1, -Infinity, Infinity, 1),
+        }));
+        scored.sort((a, b) => b.score - a.score);
+        best = scored;
+        if (Math.abs(best[0].score) > WIN - 100) break;
       } catch (e) {
         if (e !== TIMEOUT) throw e;
         break;
       }
-      results.push({ give: q, score });
-      if (score > bestScore) {
-        bestScore = score;
-        best = q;
-      }
+      if (now() > this.limit) break;
     }
-    if (!results.length) return best;
-    const near = results.filter((r) => r.score >= bestScore - cfg.margin);
-    return near[Math.floor(this.rng() * near.length)].give;
+    return this.pickAmong(best, cfg).give;
   }
 
-  /** Break ties randomly, and on lower levels accept slightly worse moves. */
+  /**
+   * Break ties randomly, and on lower levels accept slightly worse moves — but
+   * never randomise into a move already known to be lost while a playable one
+   * is on the table, however wide the level's margin is.
+   */
   pickAmong(scored, cfg) {
-    const top = scored[0].score;
-    const near = scored.filter((m) => m.score >= top - cfg.margin);
-    return near[Math.floor(this.rng() * near.length)] || scored[0];
+    const playable = scored.filter((m) => m.score > -(WIN / 2));
+    const pool = playable.length ? playable : scored;
+    const top = pool[0].score;
+    const near = pool.filter((m) => m.score >= top - cfg.margin);
+    return near[Math.floor(this.rng() * near.length)] || pool[0];
   }
 }
 

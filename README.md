@@ -35,9 +35,13 @@ Completed lines are detected and highlighted automatically, so nobody has to rem
 
 | Level | Behaviour |
 | --- | --- |
-| Easy | Plays carelessly about half the time, but always takes a win it is handed |
-| Medium | ~4-ply search on a 0.7 s budget, and picks randomly among near-equal moves |
-| Hard | Iterative deepening to a 2.6 s budget, no deliberate slack |
+| Easy | Plays at random about half the time — it *will* hand you a winning piece — but always takes a win it is handed |
+| Medium | Never hands over a winning piece, and always searches at least three plies, which is the depth that sees the standard two-move trap. Goes deeper when the clock allows, and picks randomly among near-equal moves |
+| Hard | Iterative deepening on a 2.6 s budget, no deliberate slack, and solves the endgame outright |
+
+Each level declares a `minDepth` that ignores the time budget. That floor is what turns
+medium's behaviour into a guarantee rather than something that holds only on a fast machine —
+`test/ai.test.mjs` checks it with the budget set to 1 ms.
 
 ## How the search works
 

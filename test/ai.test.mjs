@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { ALL_PIECES, bit, emptyBoard, getLines, isHot, threats, winAt, linesByCell } from '../src/engine.js';
 import { newGame, place, select } from '../src/game.js';
-import { Searcher, chooseMove, mulberry32 } from '../src/ai.js';
+import { Searcher, WIN, chooseMove, mulberry32 } from '../src/ai.js';
 
 const lines = getLines(false);
 const byCell = linesByCell(lines);
@@ -72,6 +72,107 @@ test('when every hand-off loses, the search reports a losing score', () => {
   const avail = availFrom(board, hand);
   const move = s.bestMove(board, hand, avail, 'hard');
   assert.ok(typeof move.cell === 'number' && move.cell >= 0);
+});
+
+/**
+ * A position where three of the forty legal moves lose by force: hand the
+ * piece over, the opponent places it and hands back something safe, and now
+ * every piece left wins for them. A depth-1 or depth-2 search cannot see it.
+ */
+const TRAP = {
+  board: Int8Array.from([10, -1, -1, -1, 15, -1, 1, 6, -1, -1, -1, 8, -1, -1, 5, 7]),
+  hand: 3,
+  avail: 31253,
+  losing: [
+    [9, 9],
+    [9, 11],
+    [13, 12],
+  ],
+};
+
+function isForcedLoss(cell, give) {
+  return TRAP.losing.some(([c, g]) => c === cell && g === give);
+}
+
+test('depth 3 is what exposes the two-move trap', () => {
+  const seen = [1, 2, 3].map((depth) => {
+    const s = new Searcher({ rng: mulberry32(1) });
+    s.limit = Infinity;
+    s.deadline = Infinity;
+    const board = Int8Array.from(TRAP.board);
+    const moves = s.rootMoves(board, TRAP.hand, TRAP.avail);
+    const scored = s.scoreRoot(board, TRAP.hand, TRAP.avail, moves, depth, 0);
+    return scored.filter((m) => m.score <= -(WIN / 2)).length;
+  });
+  assert.deepEqual(seen, [0, 0, 3], 'depths 1 and 2 are blind to it, depth 3 sees all three');
+});
+
+test('medium never walks into the trap, and never hands over a winning piece', () => {
+  for (let seed = 0; seed < 40; seed++) {
+    const move = chooseMove({ board: TRAP.board, piece: TRAP.hand, avail: TRAP.avail, level: 'medium', seed });
+    assert.equal(isForcedLoss(move.cell, move.give), false, `seed ${seed} played a losing move`);
+
+    const after = Int8Array.from(TRAP.board);
+    after[move.cell] = TRAP.hand;
+    assert.equal(isHot(move.give, threats(after, lines)), false, `seed ${seed} handed over a winning piece`);
+  }
+});
+
+test('the depth floor holds even when the clock has already run out', () => {
+  // minDepth ignores the time budget on purpose: the level's promise must not
+  // depend on how fast the machine is.
+  for (let seed = 0; seed < 12; seed++) {
+    const move = chooseMove({
+      board: TRAP.board,
+      piece: TRAP.hand,
+      avail: TRAP.avail,
+      level: 'medium',
+      seed,
+      timeMs: 1,
+    });
+    assert.equal(isForcedLoss(move.cell, move.give), false, `seed ${seed} played a losing move`);
+  }
+});
+
+test('medium hands over a winning piece in no game it plays', () => {
+  for (let seed = 0; seed < 4; seed++) {
+    let g = newGame({ first: 0 });
+    let guard = 0;
+    while (g.status === 'playing' && guard++ < 40) {
+      // Seat 1 is medium; seat 0 plays randomly to steer into varied positions.
+      if (g.turn === 1) {
+        const move = chooseMove({
+          board: g.board,
+          piece: g.phase === 'place' ? g.hand : -1,
+          avail: g.avail,
+          level: 'medium',
+          seed: seed * 31 + guard,
+          timeMs: 200,
+        });
+        if (g.phase === 'place') {
+          g = place(g, move.cell);
+        } else {
+          assert.equal(
+            isHot(move.give, threats(g.board, lines)),
+            false,
+            `game ${seed} move ${guard}: medium handed over a winning piece`,
+          );
+          g = select(g, move.give);
+        }
+      } else {
+        const rng = mulberry32(seed * 977 + guard);
+        if (g.phase === 'place') {
+          const cells = [];
+          for (let c = 0; c < 16; c++) if (g.board[c] < 0) cells.push(c);
+          g = place(g, cells[Math.floor(rng() * cells.length)]);
+        } else {
+          const pool = [];
+          for (let p = 0; p < 16; p++) if (g.avail & bit(p)) pool.push(p);
+          g = select(g, pool[Math.floor(rng() * pool.length)]);
+        }
+      }
+    }
+  }
 });
 
 test('hard beats easy over a series of games', () => {

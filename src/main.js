@@ -282,6 +282,12 @@ function closeOverlay(node) {
   }, 180);
 }
 
+const LEVEL_NOTES = {
+  easy: 'Plays carelessly — it will hand you a winning piece.',
+  medium: 'Never hands you a win, and looks two moves ahead for traps.',
+  hard: 'Searches as deep as its time budget allows, and solves the endgame.',
+};
+
 function syncSetup() {
   for (const group of el.setup.querySelectorAll('.segmented')) {
     const key = group.dataset.group;
@@ -290,6 +296,7 @@ function syncSetup() {
     }
   }
   document.getElementById('squares-toggle').checked = settings.useSquares;
+  document.getElementById('level-note').textContent = LEVEL_NOTES[settings.level] || '';
   const cpu = settings.mode === 'cpu';
   document.getElementById('field-level').hidden = !cpu;
   const first = document.getElementById('field-first');
