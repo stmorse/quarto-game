@@ -21,6 +21,7 @@ const el = {
   theme: document.getElementById('theme'),
   setup: document.getElementById('setup'),
   rules: document.getElementById('rules'),
+  peek: document.getElementById('peek'),
 };
 
 const settings = loadSettings();
@@ -48,6 +49,15 @@ function saveSettings() {
   } catch {
     /* private browsing — settings just won't persist */
   }
+}
+
+/** "tall dark square hollow" -> "Tall · Dark · Square · Hollow". Done here
+ *  rather than with text-transform, which Chrome skips on the leading word. */
+function formatPiece(piece) {
+  return pieceName(piece)
+    .split(' ')
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(' · ');
 }
 
 function isAI(player) {
@@ -108,7 +118,7 @@ function buildTray() {
   el.tray.innerHTML = Array.from(
     { length: PIECES },
     (_, p) =>
-      `<button class="slot" type="button" data-piece="${p}" title="${pieceName(p)}" aria-label="${pieceName(p)}">` +
+      `<button class="slot" type="button" data-piece="${p}" aria-label="${pieceName(p)}">` +
       pieceSVG(p) +
       `</button>`,
   ).join('');
@@ -135,7 +145,14 @@ function render() {
     cell.classList.toggle('filled', filled);
     cell.classList.toggle('last', filled && i === state.lastCell);
     cell.classList.toggle('win', !!state.winLine && state.winLine.includes(i));
-    cell.disabled = !(humanTurn && canPlace(state, i));
+    // Not `disabled`: an occupied cell is still worth pressing to identify the
+    // piece sitting on it, so playability is a class rather than a dead button.
+    const playable = humanTurn && canPlace(state, i);
+    cell.classList.toggle('locked', !playable);
+    cell.setAttribute('aria-disabled', String(!playable));
+    const r = Math.floor(i / 4) + 1;
+    const c = (i % 4) + 1;
+    cell.setAttribute('aria-label', filled ? `Row ${r}, column ${c}: ${pieceName(p)}` : `Row ${r}, column ${c}, empty`);
   }
 
   for (const slot of el.tray.children) {
@@ -143,7 +160,9 @@ function render() {
     const inPool = has(state.avail, p);
     slot.classList.toggle('taken', !inPool);
     slot.classList.toggle('inhand', p === state.hand);
-    slot.disabled = !(humanTurn && canSelect(state, p));
+    const playable = humanTurn && canSelect(state, p);
+    slot.classList.toggle('locked', !playable);
+    slot.setAttribute('aria-disabled', String(!playable));
   }
 
   const left = countBits(state.avail);
@@ -154,7 +173,7 @@ function render() {
   const showName = state.status === 'playing' && state.hand >= 0;
   el.hint.className = 'hint' + (showName ? ' piece-name' : '');
   el.hint.textContent = showName
-    ? pieceName(state.hand)
+    ? formatPiece(state.hand)
     : state.status === 'playing' && selecting
       ? 'Pick the piece your opponent must play'
       : '';
@@ -200,9 +219,53 @@ function countBits(n) {
   return c;
 }
 
+/* -------------------------------------------------------------------- peek */
+
+// Identifying a piece has to work three ways: hover on a desktop, a press on a
+// touch screen, and keyboard focus. All three route through one popover.
+
+let peekOwner = null;
+let peekTimer = 0;
+
+function showPeek(node, piece, autoHide = false) {
+  clearTimeout(peekTimer);
+  peekOwner = node;
+  el.peek.textContent = formatPiece(piece);
+  el.peek.hidden = false;
+  el.peek.classList.add('show');
+
+  const r = node.getBoundingClientRect();
+  const below = r.top < 76; // no room above — flip under the piece
+  el.peek.classList.toggle('below', below);
+  const half = el.peek.offsetWidth / 2;
+  el.peek.style.left = `${Math.min(Math.max(r.left + r.width / 2, half + 10), window.innerWidth - half - 10)}px`;
+  el.peek.style.top = `${below ? r.bottom : r.top}px`;
+
+  if (autoHide) peekTimer = setTimeout(hidePeek, 2400);
+}
+
+function hidePeek() {
+  clearTimeout(peekTimer);
+  peekOwner = null;
+  el.peek.classList.remove('show');
+  el.peek.hidden = true;
+}
+
+/** The piece under an event, if any: [element, piece]. */
+function peekTarget(e) {
+  const cell = e.target.closest?.('.cell');
+  if (cell) {
+    const p = state.board[Number(cell.dataset.cell)];
+    return p >= 0 ? [cell, p] : null;
+  }
+  const slot = e.target.closest?.('.slot');
+  return slot ? [slot, Number(slot.dataset.piece)] : null;
+}
+
 /* ------------------------------------------------------------------- moves */
 
 function commit(next) {
+  hidePeek();
   history.push(state);
   if (history.length > 64) history.shift();
   state = next;
@@ -316,13 +379,50 @@ function startGame() {
 
 el.board.addEventListener('click', (e) => {
   const cell = e.target.closest('.cell');
-  if (cell) onPlace(Number(cell.dataset.cell));
+  if (!cell) return;
+  const i = Number(cell.dataset.cell);
+  if (state.board[i] >= 0) showPeek(cell, state.board[i], true);
+  else onPlace(i);
 });
 
 el.tray.addEventListener('click', (e) => {
   const slot = e.target.closest('.slot');
-  if (slot) onSelect(Number(slot.dataset.piece));
+  if (!slot) return;
+  const p = Number(slot.dataset.piece);
+  if (slot.classList.contains('locked')) showPeek(slot, p, true);
+  else onSelect(p);
 });
+
+// Press-to-preview: on a touch screen the label appears as the finger lands,
+// so a piece can be identified before the tap completes (slide off to cancel).
+for (const root of [el.board, el.tray]) {
+  root.addEventListener('pointerdown', (e) => {
+    const t = peekTarget(e);
+    if (t) showPeek(t[0], t[1]);
+  });
+
+  root.addEventListener('pointerover', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    const t = peekTarget(e);
+    if (t && t[0] !== peekOwner) showPeek(t[0], t[1]);
+  });
+
+  root.addEventListener('pointerout', (e) => {
+    if (e.pointerType !== 'mouse' || !peekOwner) return;
+    if (e.relatedTarget && peekOwner.contains(e.relatedTarget)) return;
+    hidePeek();
+  });
+
+  root.addEventListener('focusin', (e) => {
+    const t = peekTarget(e);
+    if (t) showPeek(t[0], t[1]);
+  });
+
+  root.addEventListener('focusout', hidePeek);
+}
+
+window.addEventListener('scroll', hidePeek, { passive: true });
+window.addEventListener('resize', hidePeek);
 
 el.undo.addEventListener('click', undo);
 
@@ -361,6 +461,7 @@ el.rules.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
+  hidePeek();
   if (!el.setup.hidden) closeOverlay(el.setup);
   if (!el.rules.hidden) closeOverlay(el.rules);
 });

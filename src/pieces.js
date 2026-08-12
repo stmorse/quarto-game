@@ -7,9 +7,11 @@
 import { COLOR, HEIGHT, HOLLOW, SHAPE, pieceName } from './engine.js';
 
 const VIEW = 100;
-const TALL = 74;
-const SHORT = 52;
-const HOLE = 0.38; // hole size as a fraction of the outer size
+// Height is the one attribute carried purely by scale, so it needs a wide
+// gap to stay readable at board size — these are a 1.8x ratio, not 1.4x.
+const TALL = 84;
+const SHORT = 46;
+const HOLE = 0.4; // hole size as a fraction of the outer size
 
 function circlePath(cx, cy, r) {
   return `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0 Z`;

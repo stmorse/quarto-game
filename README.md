@@ -31,6 +31,9 @@ diagonal whose four pieces share at least one attribute. Turn on the **2×2 vari
 Completed lines are detected and highlighted automatically, so nobody has to remember to call
 "Quarto!"
 
+Any piece can be identified by name — hover it on a desktop, press it on a touch screen, or
+tab to it with the keyboard, on the board and in the tray alike.
+
 ## Difficulty
 
 | Level | Behaviour |

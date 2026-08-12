@@ -2,7 +2,8 @@
 
 :root {
   --piece-light: #f1ebdf;
-  --piece-dark: #15171c;
+  /* --piece-dark is set per theme: it has to stay clearly off the tile colour,
+     or a solid dark piece reads as an empty ring and solid/hollow collapse. */
   --ink-on-light: #14161b;
   --ink-on-dark: #f1ebdf;
   --accent: #ff5a36;
@@ -22,6 +23,7 @@
   --text: #eceaf0;
   --muted: #878d9a;
   --accent-soft: #35211d;
+  --piece-dark: #2f353f;
   --shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.9);
 }
 
@@ -36,6 +38,7 @@
   --text: #16181d;
   --muted: #6f7480;
   --accent-soft: #ffe6df;
+  --piece-dark: #23262d;
   --shadow: 0 24px 50px -32px rgba(60, 50, 40, 0.55);
 }
 
@@ -315,6 +318,21 @@ h2 {
   pointer-events: none;
 }
 
+/* An occupied cell is inspectable, not inert — say so quietly on hover. */
+.cell.filled:hover::before,
+.cell.filled:focus-visible::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  box-shadow: inset 0 0 0 2px var(--grid);
+  pointer-events: none;
+}
+
+.cell:not(.filled).locked {
+  cursor: default;
+}
+
 .cell.win {
   background: var(--accent-soft);
 }
@@ -456,7 +474,6 @@ h2 {
 
 .hint.piece-name {
   color: var(--text);
-  text-transform: capitalize;
   letter-spacing: 0.01em;
 }
 
@@ -481,8 +498,8 @@ h2 {
     opacity 0.2s var(--ease);
 }
 
-.slot:not(:disabled):hover,
-.slot:not(:disabled):focus-visible {
+.slot:not(.locked):hover,
+.slot:not(.locked):focus-visible {
   background: var(--tile-hot);
   box-shadow: inset 0 0 0 2px var(--accent);
   transform: translateY(-2px);
@@ -502,6 +519,51 @@ h2 {
 .side-actions {
   display: flex;
   gap: 10px;
+}
+
+/* ------------------------------------------------------------------- peek */
+
+.peek {
+  position: fixed;
+  z-index: 30;
+  padding: 7px 13px;
+  border-radius: 9px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -100%) translateY(-11px);
+  transition: opacity 0.13s var(--ease);
+  box-shadow: var(--shadow);
+}
+
+.peek.below {
+  transform: translate(-50%, 0) translateY(11px);
+}
+
+.peek.show {
+  opacity: 1;
+}
+
+.peek::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--text);
+}
+
+.peek.below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--text);
 }
 
 /* --------------------------------------------------------------- overlays */
